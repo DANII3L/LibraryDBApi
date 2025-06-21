@@ -1,5 +1,6 @@
 using System;
 using System.Data.SqlClient;
+using System.Data;
 
 namespace LibraryDBApi.Models
 {
@@ -117,11 +118,13 @@ namespace LibraryDBApi.Models
             {
                 DataSource = Server,
                 InitialCatalog = Database,
-                ConnectionTimeout = ConnectionTimeout,
-                CommandTimeout = CommandTimeout,
                 Encrypt = Encrypt,
                 TrustServerCertificate = TrustServerCertificate
             };
+
+            // Agregar timeouts como parámetros de cadena de conexión
+            builder["Connection Timeout"] = ConnectionTimeout;
+            builder["Command Timeout"] = CommandTimeout;
 
             if (IntegratedSecurity)
             {
@@ -153,7 +156,8 @@ namespace LibraryDBApi.Models
                 Database = builder.InitialCatalog;
                 UserId = builder.UserID;
                 Password = builder.Password;
-                ConnectionTimeout = builder.ConnectionTimeout;
+                ConnectionTimeout = builder.ContainsKey("Connection Timeout") ? (int)builder["Connection Timeout"] : 30;
+                CommandTimeout = builder.ContainsKey("Command Timeout") ? (int)builder["Command Timeout"] : 30;
                 IntegratedSecurity = builder.IntegratedSecurity;
                 Encrypt = builder.Encrypt;
                 TrustServerCertificate = builder.TrustServerCertificate;

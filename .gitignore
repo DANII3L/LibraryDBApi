@@ -1,0 +1,42 @@
+# Build results
+[Dd]ebug/
+[Rr]elease/
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio files
+.vs/
+*.user
+*.suo
+*.sln.docstates
+
+# NuGet packages
+*.nupkg
+# NuGet cache files
+*.nuget.cache
+project.assets.json
+*.csproj.nuget.*
+
+# Rider files
+.idea/
+
+# Dotnet specific
+*.runtimeconfig.dev.json
+
+# Local history files
+.history/
+
+# Log files
+*.log
+
+# Windows thumbnail cache
+Thumbs.db
+
+# macOS files
+.DS_Store
+
+# Other common temporary files
+*~
+*.bak
+*.swp
+*.swo 

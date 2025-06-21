@@ -19,13 +19,12 @@ namespace LibraryDBApi.Core
     public class BaseDataService : IDataService
     {
         /// <summary>
-        /// Ejecuta un procedimiento almacenado y devuelve un resultado tipado
+        /// Ejecuta un procedimiento almacenado y devuelve un resultado tipado como IEnumerable
         /// </summary>
-        public async Task<StoredProcedureResult<TResult>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName)
+        public async Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName) where TResult : new()
         {
             try
             {
-                // Ejecutar el procedimiento sin parámetros
                 var dataSet = new DataSet();
                 using (var connection = new SqlConnection(connectionString))
                 using (var command = new SqlCommand(procedureName, connection))
@@ -35,74 +34,57 @@ namespace LibraryDBApi.Core
                     adapter.Fill(dataSet);
                 }
 
-                // Mapear el resultado
-                var result = new StoredProcedureResult<TResult>(dataSet);
+                var result = new StoredProcedureResult<IEnumerable<TResult>>(dataSet);
                 if (dataSet.Tables.Count > 0)
                 {
-                    var table = dataSet.Tables[0];
-                    if (typeof(TResult).IsGenericType && typeof(TResult).GetGenericTypeDefinition() == typeof(List<>))
-                    {
-                        var elementType = typeof(TResult).GetGenericArguments()[0];
-                        var toListMethod = typeof(BaseDataService).GetMethod(nameof(DataTableToList), BindingFlags.NonPublic | BindingFlags.Static)
-                            .MakeGenericMethod(elementType);
-                        result.Data = (TResult)toListMethod.Invoke(null, new object[] { table });
-                    }
-                    else
-                    {
-                        var toObjectMethod = typeof(BaseDataService).GetMethod(nameof(DataTableToObject), BindingFlags.NonPublic | BindingFlags.Static)
-                            .MakeGenericMethod(typeof(TResult));
-                        result.Data = (TResult)toObjectMethod.Invoke(null, new object[] { table });
-                    }
+                    result.Data = DataTableToList<TResult>(dataSet.Tables[0]);
                 }
+                else
+                {
+                    result.Data = Enumerable.Empty<TResult>();
+                }
+                
                 result.IsSuccess = true;
                 result.Message = "Operación exitosa";
                 return result;
             }
             catch (Exception ex)
             {
-                return StoredProcedureResult<TResult>.Failure(ex);
+                return StoredProcedureResult<IEnumerable<TResult>>.Failure(ex);
             }
         }
 
         /// <summary>
-        /// Ejecuta un procedimiento almacenado con parámetros y devuelve un resultado tipado (inferencia automática del modelo)
+        /// Ejecuta un procedimiento almacenado con parámetros y devuelve un resultado tipado como IEnumerable (inferencia automática del modelo)
         /// </summary>
-        public async Task<StoredProcedureResult<TResult>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, object model)
+        public async Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, object model) where TResult : new()
         {
             try
             {
-                // 1. Obtener los parámetros reales del procedimiento
                 var dbParameters = await GetProcedureParametersAsync(connectionString, procedureName);
-
-                // 2. Convertir el modelo a diccionario usando reflexión
                 var modelDict = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
                 if (model != null)
                 {
-                    var modelType = model.GetType();
-                    var properties = modelType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-                    foreach (var prop in properties)
+                    foreach (var prop in model.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
                     {
                         modelDict[prop.Name] = prop.GetValue(model);
                     }
                 }
 
-                // 3. Filtrar y crear parámetros compatibles
                 var parameters = new List<SqlParameter>();
                 foreach (var dbParam in dbParameters)
                 {
                     if (modelDict.TryGetValue(dbParam.ParameterName.TrimStart('@'), out var value))
                     {
-                        var sqlParam = new SqlParameter(dbParam.ParameterName, dbParam.SqlDbType)
+                        parameters.Add(new SqlParameter(dbParam.ParameterName, dbParam.SqlDbType)
                         {
                             Direction = dbParam.Direction,
                             Size = dbParam.Size > 0 ? dbParam.Size : 0,
                             Value = value ?? DBNull.Value
-                        };
-                        parameters.Add(sqlParam);
+                        });
                     }
                 }
 
-                // 4. Ejecutar el procedimiento
                 var dataSet = new DataSet();
                 using (var connection = new SqlConnection(connectionString))
                 using (var command = new SqlCommand(procedureName, connection))
@@ -113,32 +95,23 @@ namespace LibraryDBApi.Core
                     adapter.Fill(dataSet);
                 }
 
-                // 5. Mapear el resultado
-                var result = new StoredProcedureResult<TResult>(dataSet);
+                var result = new StoredProcedureResult<IEnumerable<TResult>>(dataSet);
                 if (dataSet.Tables.Count > 0)
                 {
-                    var table = dataSet.Tables[0];
-                    if (typeof(TResult).IsGenericType && typeof(TResult).GetGenericTypeDefinition() == typeof(List<>))
-                    {
-                        var elementType = typeof(TResult).GetGenericArguments()[0];
-                        var toListMethod = typeof(BaseDataService).GetMethod(nameof(DataTableToList), BindingFlags.NonPublic | BindingFlags.Static)
-                            .MakeGenericMethod(elementType);
-                        result.Data = (TResult)toListMethod.Invoke(null, new object[] { table });
-                    }
-                    else
-                    {
-                        var toObjectMethod = typeof(BaseDataService).GetMethod(nameof(DataTableToObject), BindingFlags.NonPublic | BindingFlags.Static)
-                            .MakeGenericMethod(typeof(TResult));
-                        result.Data = (TResult)toObjectMethod.Invoke(null, new object[] { table });
-                    }
+                    result.Data = DataTableToList<TResult>(dataSet.Tables[0]);
                 }
+                else
+                {
+                    result.Data = Enumerable.Empty<TResult>();
+                }
+                
                 result.IsSuccess = true;
                 result.Message = "Operación exitosa";
                 return result;
             }
             catch (Exception ex)
             {
-                return StoredProcedureResult<TResult>.Failure(ex);
+                return StoredProcedureResult<IEnumerable<TResult>>.Failure(ex);
             }
         }
 
@@ -679,10 +652,10 @@ namespace LibraryDBApi.Core
                 }
 
                 // Mapeo automático si no hay atributo explícito
-                var columnName = FindBestColumnMatch(prop.Name, availableColumns);
-                if (!string.IsNullOrEmpty(columnName))
+                var autoColumnName = FindBestColumnMatch(prop.Name, availableColumns);
+                if (!string.IsNullOrEmpty(autoColumnName))
                 {
-                    mappings[prop.Name] = columnName;
+                    mappings[prop.Name] = autoColumnName;
                 }
             }
 
@@ -1142,7 +1115,7 @@ namespace LibraryDBApi.Core
             return dataSet;
         }
 
-        public StoredProcedureResult<T> ExecuteProcedure<T>(string connectionString, string jsonParameters, string procedureName)
+        public StoredProcedureResult<T> ExecuteProcedure<T>(string connectionString, string jsonParameters, string procedureName) where T : new()
         {
             try
             {
@@ -1150,7 +1123,7 @@ namespace LibraryDBApi.Core
                 var result = new StoredProcedureResult<T>(dataSet);
                 if (dataSet.Tables.Count > 0)
                 {
-                    result.Data = dataSet.Tables[0].ToList<T>();
+                    result.Data = dataSet.Tables[0].ToObject<T>();
                 }
                 result.IsSuccess = true;
                 result.Message = "Operación exitosa";
@@ -1162,7 +1135,7 @@ namespace LibraryDBApi.Core
             }
         }
 
-        public async Task<StoredProcedureResult<T>> ExecuteProcedureAsync<T>(string connectionString, string jsonParameters, string procedureName)
+        public async Task<StoredProcedureResult<T>> ExecuteProcedureAsync<T>(string connectionString, string jsonParameters, string procedureName) where T : new()
         {
             try
             {
@@ -1170,7 +1143,7 @@ namespace LibraryDBApi.Core
                 var result = new StoredProcedureResult<T>(dataSet);
                 if (dataSet.Tables.Count > 0)
                 {
-                    result.Data = dataSet.Tables[0].ToList<T>();
+                    result.Data = dataSet.Tables[0].ToObject<T>();
                 }
                 result.IsSuccess = true;
                 result.Message = "Operación exitosa";

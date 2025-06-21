@@ -1,0 +1,2 @@
+C:\Users\bedom\OneDrive\Documentos\Daniel M\DORA\LibraryDB\LibraryDBApi\obj\Release\LibraryDBApi.csproj.AssemblyReference.cache
+C:\Users\bedom\OneDrive\Documentos\Daniel M\DORA\LibraryDB\LibraryDBApi\obj\Release\LibraryDBApi.csproj.CoreCompileInputs.cache

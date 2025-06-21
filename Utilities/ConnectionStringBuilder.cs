@@ -1,6 +1,7 @@
 using System;
 using System.Data.SqlClient;
 using LibraryDBApi.Models;
+using System.Data;
 
 namespace LibraryDBApi.Utilities
 {
@@ -25,10 +26,12 @@ namespace LibraryDBApi.Utilities
                 DataSource = server,
                 InitialCatalog = database,
                 UserID = userId,
-                Password = password,
-                ConnectionTimeout = timeout,
-                CommandTimeout = timeout
+                Password = password
             };
+
+            // Agregar timeout como parámetro de cadena de conexión
+            builder["Connection Timeout"] = timeout;
+            builder["Command Timeout"] = timeout;
 
             return builder.ConnectionString;
         }
@@ -46,10 +49,12 @@ namespace LibraryDBApi.Utilities
             {
                 DataSource = server,
                 InitialCatalog = database,
-                IntegratedSecurity = true,
-                ConnectionTimeout = timeout,
-                CommandTimeout = timeout
+                IntegratedSecurity = true
             };
+
+            // Agregar timeout como parámetro de cadena de conexión
+            builder["Connection Timeout"] = timeout;
+            builder["Command Timeout"] = timeout;
 
             return builder.ConnectionString;
         }
@@ -201,8 +206,8 @@ namespace LibraryDBApi.Utilities
                     Database = builder.InitialCatalog,
                     UserId = builder.UserID,
                     IntegratedSecurity = builder.IntegratedSecurity,
-                    ConnectionTimeout = builder.ConnectionTimeout,
-                    CommandTimeout = builder.CommandTimeout,
+                    ConnectionTimeout = builder.ContainsKey("Connection Timeout") ? (int)builder["Connection Timeout"] : 30,
+                    CommandTimeout = builder.ContainsKey("Command Timeout") ? (int)builder["Command Timeout"] : 30,
                     Encrypt = builder.Encrypt,
                     TrustServerCertificate = builder.TrustServerCertificate
                 };
@@ -224,10 +229,10 @@ namespace LibraryDBApi.Utilities
                 return;
 
             if (options.ConnectionTimeout.HasValue)
-                builder.ConnectionTimeout = options.ConnectionTimeout.Value;
+                builder["Connection Timeout"] = options.ConnectionTimeout.Value;
 
             if (options.CommandTimeout.HasValue)
-                builder.CommandTimeout = options.CommandTimeout.Value;
+                builder["Command Timeout"] = options.CommandTimeout.Value;
 
             if (options.Encrypt.HasValue)
                 builder.Encrypt = options.Encrypt.Value;
