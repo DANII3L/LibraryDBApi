@@ -51,6 +51,21 @@ namespace LibraryDBApi.Models
         public long ExecutionTimeMs { get; set; }
 
         /// <summary>
+        /// Total de registros disponibles (para paginación)
+        /// </summary>
+        public int? TotalRecords { get; set; }
+
+        /// <summary>
+        /// Número de página actual (para paginación)
+        /// </summary>
+        public int? PageNumber { get; set; }
+
+        /// <summary>
+        /// Tamaño de la página (cantidad de registros por página para paginación)
+        /// </summary>
+        public int? PageSize { get; set; }
+
+        /// <summary>
         /// Constructor por defecto
         /// </summary>
         public StoredProcedureResult()

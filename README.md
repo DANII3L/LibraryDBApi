@@ -200,7 +200,6 @@ if (resultadoConsulta.IsSuccess)
 else
 {
     Console.WriteLine($"Error: {resultadoConsulta.Message}");
-    Console.WriteLine($"Detalles: {resultadoConsulta.Exception?.Message}"); // Acceder a Message si la excepción existe
 }
 ```
 
@@ -221,10 +220,30 @@ else
 | 1000 actualizaciones | 25 segundos | 2 segundos | 12x más rápido |
 | Mapeo de resultados | 50 líneas | 1 línea | 50x menos código |
 
-## 🤝 Contribuir
+## 📦 Publicación del Paquete NuGet
 
-¡Las contribuciones son bienvenidas! Por favor, abre un issue o pull request.
+Sigue estos pasos para crear y publicar el paquete NuGet de `LibraryDBApi`:
 
-## 📄 Licencia
+### 1. Crear el paquete `.nupkg`
 
-MIT License - ver [LICENSE](LICENSE) para más detalles. 
+Primero, asegúrate de que tu proyecto tenga la versión correcta (por ejemplo, `1.0.1` en `LibraryDBApi.csproj` si aún no lo has hecho, aunque la creación del paquete inferirá la versión del `csproj`). Luego, ejecuta el siguiente comando en la raíz de tu proyecto `LibraryDBApi`:
+
+```bash
+dotnet pack --configuration Release /p:Version=1.0.1
+```
+
+Este comando compilará tu proyecto en modo `Release` y generará el archivo `.nupkg` (por ejemplo, `LibraryDBApi.1.0.1.nupkg`) en la carpeta `bin/Release/` o `bin/Release/net9.0/`.
+
+### 2. Publicar el paquete en NuGet.org
+
+Antes de publicar, asegúrate de tener una cuenta en [NuGet.org](https://www.nuget.org/) y haber generado una clave de API.
+
+```bash
+dotnet nuget push "C:\Users\bedom\OneDrive\Documentos\Daniel M\DORA\LibraryDB\LibraryDBApi\bin\Release\LibraryDBApi.1.0.1.nupkg" --source "https://nuget.pkg.github.com/DANII3L/index.json" --api-key %NUGET_GITHUB_TOKEN% --skip-duplicate
+```
+
+**Reemplaza `bin/Release/LibraryDBApi.1.0.1.nupkg`** con la ruta real a tu archivo `.nupkg` (la ruta exacta puede variar ligeramente dependiendo de la estructura de tu proyecto y la versión de .NET, podría ser `bin/Release/net9.0/LibraryDBApi.1.0.1.nupkg`).
+
+**Reemplaza `TU_API_KEY_AQUI`** con tu clave de API generada en NuGet.org.
+
+Una vez que el comando se complete exitosamente, tu paquete estará disponible públicamente en NuGet.org para que otros desarrolladores puedan instalarlo. 

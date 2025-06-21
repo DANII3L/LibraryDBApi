@@ -21,7 +21,7 @@ namespace LibraryDBApi.Core
         /// <summary>
         /// Ejecuta un procedimiento almacenado y devuelve un resultado tipado como IEnumerable
         /// </summary>
-        public async Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName) where TResult : new()
+        public async Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, int? pageNumber = null, int? pageSize = null) where TResult : new()
         {
             try
             {
@@ -30,6 +30,10 @@ namespace LibraryDBApi.Core
                 using (var command = new SqlCommand(procedureName, connection))
                 {
                     command.CommandType = CommandType.StoredProcedure;
+                    // Añadir parámetros de paginación al comando si se proporcionan
+                    if (pageNumber.HasValue) command.Parameters.AddWithValue("@PageNumber", pageNumber.Value);
+                    if (pageSize.HasValue) command.Parameters.AddWithValue("@PageSize", pageSize.Value);
+
                     var adapter = new SqlDataAdapter(command);
                     adapter.Fill(dataSet);
                 }
@@ -37,11 +41,24 @@ namespace LibraryDBApi.Core
                 var result = new StoredProcedureResult<IEnumerable<TResult>>(dataSet);
                 if (dataSet.Tables.Count > 0)
                 {
-                    result.Data = DataTableToList<TResult>(dataSet.Tables[0]);
+                    var table = dataSet.Tables[0];
+                    result.Data = DataTableToList<TResult>(table);
+
+                    // Extraer TotalRecords de la primera fila si existe y es un valor válido
+                    if (table.Rows.Count > 0 && table.Columns.Contains("TotalRecords") && int.TryParse(table.Rows[0]["TotalRecords"].ToString(), out int totalRecords))
+                    {
+                        result.TotalRecords = totalRecords;
+                    }
+                    // Asignar los valores de paginación pasados al resultado
+                    result.PageNumber = pageNumber;
+                    result.PageSize = pageSize;
                 }
                 else
                 {
                     result.Data = Enumerable.Empty<TResult>();
+                    result.TotalRecords = 0; // Si no hay datos, TotalRecords es 0
+                    result.PageNumber = pageNumber;
+                    result.PageSize = pageSize;
                 }
                 
                 result.IsSuccess = true;
@@ -57,7 +74,7 @@ namespace LibraryDBApi.Core
         /// <summary>
         /// Ejecuta un procedimiento almacenado con parámetros y devuelve un resultado tipado como IEnumerable (inferencia automática del modelo)
         /// </summary>
-        public async Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, object model) where TResult : new()
+        public async Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, object model, int? pageNumber = null, int? pageSize = null) where TResult : new()
         {
             try
             {
@@ -72,6 +89,7 @@ namespace LibraryDBApi.Core
                 }
 
                 var parameters = new List<SqlParameter>();
+
                 foreach (var dbParam in dbParameters)
                 {
                     if (modelDict.TryGetValue(dbParam.ParameterName.TrimStart('@'), out var value))
@@ -84,6 +102,10 @@ namespace LibraryDBApi.Core
                         });
                     }
                 }
+
+                // Añadir parámetros de paginación a la lista de parámetros si se proporcionan
+                if (pageNumber.HasValue) parameters.Add(new SqlParameter("@PageNumber", pageNumber.Value));
+                if (pageSize.HasValue) parameters.Add(new SqlParameter("@PageSize", pageSize.Value));
 
                 var dataSet = new DataSet();
                 using (var connection = new SqlConnection(connectionString))
@@ -98,11 +120,24 @@ namespace LibraryDBApi.Core
                 var result = new StoredProcedureResult<IEnumerable<TResult>>(dataSet);
                 if (dataSet.Tables.Count > 0)
                 {
-                    result.Data = DataTableToList<TResult>(dataSet.Tables[0]);
+                    var table = dataSet.Tables[0];
+                    result.Data = DataTableToList<TResult>(table);
+
+                    // Extraer TotalRecords de la primera fila si existe y es un valor válido
+                    if (table.Rows.Count > 0 && table.Columns.Contains("TotalRecords") && int.TryParse(table.Rows[0]["TotalRecords"].ToString(), out int totalRecords))
+                    {
+                        result.TotalRecords = totalRecords;
+                    }
+                    // Asignar los valores de paginación pasados al resultado
+                    result.PageNumber = pageNumber;
+                    result.PageSize = pageSize;
                 }
                 else
                 {
                     result.Data = Enumerable.Empty<TResult>();
+                    result.TotalRecords = 0; // Si no hay datos, TotalRecords es 0
+                    result.PageNumber = pageNumber;
+                    result.PageSize = pageSize;
                 }
                 
                 result.IsSuccess = true;

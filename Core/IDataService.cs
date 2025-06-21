@@ -12,12 +12,12 @@ namespace LibraryDBApi.Core
         /// <summary>
         /// Ejecuta un procedimiento almacenado y devuelve un resultado tipado como IEnumerable
         /// </summary>
-        Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName) where TResult : new();
+        Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, int? pageNumber = null, int? pageSize = null) where TResult : new();
 
         /// <summary>
         /// Ejecuta un procedimiento almacenado con parámetros y devuelve un resultado tipado como IEnumerable (inferencia automática del modelo)
         /// </summary>
-        Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, object model) where TResult : new();
+        Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, object model, int? pageNumber = null, int? pageSize = null) where TResult : new();
 
         #region Operaciones Masivas Innovadoras
 
