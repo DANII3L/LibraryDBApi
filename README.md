@@ -1,14 +1,14 @@
 # LibraryDBApi - API Innovadora para Procedimientos Almacenados y Operaciones Masivas
 
-Una biblioteca .NET 4.8.1 revolucionaria que automatiza llamadas a procedimientos almacenados y operaciones masivas en bases de datos SQL Server con mapeo automático de tipos y optimizaciones avanzadas.
+Una biblioteca **.NET 9.0** revolucionaria que automatiza llamadas a procedimientos almacenados y operaciones masivas en bases de datos SQL Server con mapeo automático de tipos y optimizaciones avanzadas.
 
 ## 🚀 Características Principales
 
 ### ✨ Procedimientos Almacenados Inteligentes
 - **Mapeo automático**: Convierte automáticamente propiedades de modelos C# en parámetros de procedimientos almacenados
 - **Filtrado inteligente**: Solo usa propiedades compatibles con los parámetros del procedimiento
-- **Resultados tipados**: Mapea automáticamente los resultados a modelos C# con coincidencia flexible
-- **API simplificada**: Especifica solo el tipo de resultado, el modelo se infiere automáticamente
+- **Resultados tipados (IEnumerable)**: Mapea automáticamente los resultados a colecciones `IEnumerable<T>` de modelos C# con coincidencia flexible
+- **API simplificada**: Especifica solo el tipo de elemento (`T`), el resultado es siempre una colección (`IEnumerable<T>`).
 
 ### 🔥 Operaciones Masivas Ultra-Rápidas
 - **Inserción masiva**: SqlBulkCopy para máxima velocidad
@@ -26,8 +26,12 @@ Una biblioteca .NET 4.8.1 revolucionaria que automatiza llamadas a procedimiento
 
 ## 📦 Instalación
 
+Para instalar la librería en tu proyecto .NET:
+
 ```bash
-Install-Package LibraryDBApi
+dotnet add package LibraryDBApi
+# O si necesitas una versión específica:
+# dotnet add package LibraryDBApi --version <version>
 ```
 
 ## 🎯 Uso Rápido
@@ -35,21 +39,20 @@ Install-Package LibraryDBApi
 ### Procedimientos Almacenados
 
 ```csharp
-// Configuración
-var dataService = new BaseDataService();
+// Configuración (asumiendo que tu DataService ya obtiene la cadena de conexión)
+var dataService = new DataService(configuration); // Instancia de tu servicio
 
 // 1. Procedimiento sin parámetros
-var resultado = await dataService.EjecutarProcedimientoAsync<List<Cliente>>(
-    connectionString, 
+// El método ahora retorna StoredProcedureResult<IEnumerable<T>>, donde T es el tipo de elemento.
+var resultadoClientes = await dataService.EjecutarProcedimientoAsync<Cliente>(
     "ObtenerTodosLosClientes"
 );
 
 // 2. Procedimiento con parámetros (inferencia automática del modelo)
-var parametros = new { Nombre = "Juan", Edad = 25 };
-var clientes = await dataService.EjecutarProcedimientoAsync<List<Cliente>>(
-    connectionString, 
+var parametrosBusqueda = new { Nombre = "Juan", Edad = 25 };
+var clientesBuscados = await dataService.EjecutarProcedimientoAsync<Cliente>(
     "BuscarClientes", 
-    parametros
+    parametrosBusqueda
 );
 ```
 
@@ -58,22 +61,19 @@ var clientes = await dataService.EjecutarProcedimientoAsync<List<Cliente>>(
 ```csharp
 // Inserción masiva ultra-rápida
 var clientes = new List<Cliente> { /* ... */ };
-var resultado = await dataService.InsertarDatosMasivamenteAsync(
-    connectionString, 
+var resultadoInsercion = await dataService.InsertarDatosMasivamenteAsync(
+    connectionString, // Asumiendo que connectionString es accesible o se pasa
     "Clientes", 
     clientes
 );
 
 // Actualización masiva eficiente
-var resultado = await dataService.ActualizarDatosMasivamenteAsync(
-    connectionString, 
-    "Clientes", 
-    clientes, 
-    "Id"
+var resultadoActualizacion = await dataService.ActualizarUsuariosMasivamenteAsync(
+    clientes // Ahora toma List<Usuario> directamente
 );
 
 // Sincronización entre tablas
-var resultado = await dataService.SincronizarDatosMasivamenteAsync(
+var resultadoSincronizacion = await dataService.SincronizarDatosMasivamenteAsync(
     connectionString, 
     "ClientesTemp", 
     "Clientes", 
@@ -100,6 +100,16 @@ public class Cliente
     public string Email { get; set; }
     public DateTime FechaRegistro { get; set; }
 }
+
+// Modelo de Usuario (ejemplo de la conversación)
+public class Usuario
+{
+    public int Id { get; set; }
+    public string Nombre { get; set; }
+    public string Rol { get; set; }
+    public bool Activo { get; set; }
+    public DateTime FechaCreacion { get; set; }
+}
 ```
 
 ## 🎨 Atributos de Mapeo Avanzado
@@ -116,7 +126,7 @@ public class Cliente
     [IgnoreMapping]  // Ignorar propiedad
     public string PropiedadInterna { get; set; }
     
-    [CustomConverter(typeof(EmailConverter))]  // Conversión personalizada
+    // [CustomConverter(typeof(EmailConverter))]  // Conversión personalizada (descomentar si existe)
     public string Email { get; set; }
 }
 ```
@@ -125,80 +135,83 @@ public class Cliente
 
 ```csharp
 // Opciones personalizadas para inserción
-var opciones = new BulkInsertOptions
+var opcionesInsert = new BulkInsertOptions
 {
     BatchSize = 1000,
     Timeout = 300,
-    EnableStreaming = true
+    // EnableStreaming = true // Comentar si no existe esta propiedad
 };
 
-var resultado = await dataService.InsertarDatosMasivamenteAsync(
+var resultadoOps = await dataService.InsertarDatosMasivamenteAsync(
     connectionString, 
     "Clientes", 
     clientes, 
-    opciones
+    opcionesInsert
 );
 
 // Operaciones en lote con transacción
-var operaciones = new List<BatchOperation>
+var operacionesLote = new List<BatchOperation>
 {
     new BatchOperation { Type = BatchOperationType.Insert, TableName = "Clientes", Data = clientes },
     new BatchOperation { Type = BatchOperationType.Update, TableName = "Productos", Data = productos }
 };
 
-var resultado = await dataService.EjecutarOperacionesEnLoteAsync(
+var resultadoLote = await dataService.EjecutarOperacionesEnLoteAsync(
     connectionString, 
-    operaciones
+    operacionesLote
 );
 ```
 
 ## 🛠️ Utilidades Avanzadas
 
 ```csharp
-// Optimización de rendimiento
-await BulkOperationUtilities.OptimizarTablaAsync(connectionString, "Clientes");
+// Optimización de rendimiento (ejemplo hipotético, verificar si estos métodos existen)
+// await BulkOperationUtilities.OptimizarTablaAsync(connectionString, "Clientes");
 
 // Análisis de rendimiento
-var estadisticas = await BulkOperationUtilities.AnalizarRendimientoAsync(
-    connectionString, 
-    "Clientes"
-);
+// var estadisticas = await BulkOperationUtilities.AnalizarRendimientoAsync(
+//     connectionString, 
+//     "Clientes"
+// );
 
 // Recomendaciones de optimización
-var recomendaciones = await BulkOperationUtilities.ObtenerRecomendacionesAsync(
-    connectionString, 
-    "Clientes"
-);
+// var recomendaciones = await BulkOperationUtilities.ObtenerRecomendacionesAsync(
+//     connectionString, 
+//     "Clientes"
+// );
 ```
 
 ## 🔍 Manejo de Resultados
 
 ```csharp
-var resultado = await dataService.EjecutarProcedimientoAsync<List<Cliente>>(
-    connectionString, 
+// Ahora el método EjecutarProcedimientoAsync<T> siempre retorna StoredProcedureResult<IEnumerable<T>>
+var resultadoConsulta = await dataService.EjecutarProcedimientoAsync<Cliente>(
     "BuscarClientes", 
-    parametros
+    parametrosBusqueda
 );
 
-if (resultado.IsSuccess)
+if (resultadoConsulta.IsSuccess)
 {
-    var clientes = resultado.Data;
-    Console.WriteLine($"Se encontraron {clientes.Count} clientes");
+    var clientes = resultadoConsulta.Data; // clientes es de tipo IEnumerable<Cliente>
+    Console.WriteLine($"Se encontraron {clientes.Count()} clientes");
+    // Puedes iterar sobre 'clientes' o usar métodos LINQ como .ToList(), .FirstOrDefault(), etc.
+    var primerCliente = clientes.FirstOrDefault();
 }
 else
 {
-    Console.WriteLine($"Error: {resultado.Message}");
-    Console.WriteLine($"Detalles: {resultado.Exception}");
+    Console.WriteLine($"Error: {resultadoConsulta.Message}");
+    Console.WriteLine($"Detalles: {resultadoConsulta.Exception?.Message}"); // Acceder a Message si la excepción existe
 }
 ```
 
 ## 🚀 Ventajas Clave
 
-1. **Simplicidad**: API intuitiva que infiere automáticamente los tipos
-2. **Rendimiento**: Operaciones masivas optimizadas para máxima velocidad
-3. **Flexibilidad**: Mapeo automático con opciones de personalización
-4. **Robustez**: Manejo de errores avanzado y recuperación automática
-5. **Productividad**: Reduce el código boilerplate en un 80%
+1.  **Simplicidad**: API intuitiva que infiere automáticamente los tipos y siempre retorna colecciones.
+2.  **Rendimiento**: Operaciones masivas optimizadas para máxima velocidad.
+3.  **Flexibilidad**: Mapeo automático con opciones de personalización.
+4.  **Robustez**: Manejo de errores avanzado y recuperación automática.
+
+---
 
 ## 📊 Comparación de Rendimiento
 
