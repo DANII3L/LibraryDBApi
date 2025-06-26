@@ -10,14 +10,14 @@ namespace LibraryDBApi.Core
     public interface IDataService
     {
         /// <summary>
-        /// Ejecuta un procedimiento almacenado y devuelve un resultado tipado como IEnumerable
+        /// Ejecuta un procedimiento almacenado y devuelve un resultado tipado como IEnumerable usando parámetros unificados
         /// </summary>
-        Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, int? pageNumber = null, int? pageSize = null) where TResult : new();
+        Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(StoredProcedureParameters parameters) where TResult : new();
 
         /// <summary>
-        /// Ejecuta un procedimiento almacenado con parámetros y devuelve un resultado tipado como IEnumerable (inferencia automática del modelo)
+        /// Ejecuta un procedimiento almacenado sin modelo y devuelve un resultado tipado como IEnumerable
         /// </summary>
-        Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, object model, int? pageNumber = null, int? pageSize = null) where TResult : new();
+        Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, ModelPaginacion modelPaginacion = null) where TResult : new();
 
         #region Operaciones Masivas Innovadoras
 

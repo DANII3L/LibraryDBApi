@@ -8,7 +8,8 @@ Una biblioteca **.NET 9.0** revolucionaria que automatiza llamadas a procedimien
 - **Mapeo automático**: Convierte automáticamente propiedades de modelos C# en parámetros de procedimientos almacenados
 - **Filtrado inteligente**: Solo usa propiedades compatibles con los parámetros del procedimiento
 - **Resultados tipados (IEnumerable)**: Mapea automáticamente los resultados a colecciones `IEnumerable<T>` de modelos C# con coincidencia flexible
-- **API simplificada**: Especifica solo el tipo de elemento (`T`), el resultado es siempre una colección (`IEnumerable<T>`).
+- **API simplificada**: Especifica solo el tipo de elemento (`T`), el resultado es siempre una colección (`IEnumerable<T>`)
+- **Parámetros unificados**: Modelo único `StoredProcedureParameters` que incluye todos los parámetros necesarios
 
 ### 🔥 Operaciones Masivas Ultra-Rápidas
 - **Inserción masiva**: SqlBulkCopy para máxima velocidad
@@ -36,24 +37,89 @@ dotnet add package LibraryDBApi
 
 ## 🎯 Uso Rápido
 
-### Procedimientos Almacenados
+### Procedimientos Almacenados con Parámetros Unificados
 
 ```csharp
 // Configuración (asumiendo que tu DataService ya obtiene la cadena de conexión)
 var dataService = new DataService(configuration); // Instancia de tu servicio
 
-// 1. Procedimiento sin parámetros
-// El método ahora retorna StoredProcedureResult<IEnumerable<T>>, donde T es el tipo de elemento.
-var resultadoClientes = await dataService.EjecutarProcedimientoAsync<Cliente>(
-    "ObtenerTodosLosClientes"
+// 1. Procedimiento simple sin parámetros
+var parameters = new StoredProcedureParameters
+{
+    ConnectionString = "Server=myServer;Database=myDB;Trusted_Connection=true;",
+    ProcedureName = "ObtenerTodosLosClientes"
+};
+var resultadoClientes = await dataService.EjecutarProcedimientoAsync<Cliente>(parameters);
+
+// 2. Procedimiento con paginación
+var parametersPaginados = new StoredProcedureParameters
+{
+    ConnectionString = "Server=myServer;Database=myDB;Trusted_Connection=true;",
+    ProcedureName = "ObtenerClientes",
+    ModelPaginacion = new ModelPaginacion
+    {
+        PageNumber = 1,
+        PageSize = 10
+    }
+};
+var clientesPaginados = await dataService.EjecutarProcedimientoAsync<Cliente>(parametersPaginados);
+
+// 3. Procedimiento con modelo de parámetros
+var parametrosBusqueda = new { Nombre = "Juan", Edad = 25 };
+var parametersConModelo = new StoredProcedureParameters
+{
+    ConnectionString = "Server=myServer;Database=myDB;Trusted_Connection=true;",
+    ProcedureName = "BuscarClientes",
+    Model = parametrosBusqueda,
+    ModelPaginacion = new ModelPaginacion
+    {
+        PageNumber = 1,
+        PageSize = 20
+    }
+};
+var clientesBuscados = await dataService.EjecutarProcedimientoAsync<Cliente>(parametersConModelo);
+
+// 4. Procedimiento con filtro adicional
+var parametersConFiltro = new StoredProcedureParameters
+{
+    ConnectionString = "Server=myServer;Database=myDB;Trusted_Connection=true;",
+    ProcedureName = "BuscarClientes",
+    Model = parametrosBusqueda,
+    ModelPaginacion = new ModelPaginacion
+    {
+        PageNumber = 1,
+        PageSize = 20,
+        Filter = "activos" // Filtro adicional como string
+    }
+};
+var clientesFiltrados = await dataService.EjecutarProcedimientoAsync<Cliente>(parametersConFiltro);
+
+// 5. Usando constructor con parámetros
+var modelPaginacion = new ModelPaginacion(
+    pageNumber: 1,
+    pageSize: 20,
+    filter: "activos"
 );
 
-// 2. Procedimiento con parámetros (inferencia automática del modelo)
-var parametrosBusqueda = new { Nombre = "Juan", Edad = 25 };
-var clientesBuscados = await dataService.EjecutarProcedimientoAsync<Cliente>(
-    "BuscarClientes", 
-    parametrosBusqueda
+var parametersConstructor = new StoredProcedureParameters(
+    connectionString: "Server=myServer;Database=myDB;Trusted_Connection=true;",
+    procedureName: "BuscarClientes",
+    model: parametrosBusqueda,
+    modelPaginacion: modelPaginacion
 );
+var resultadoConstructor = await dataService.EjecutarProcedimientoAsync<Cliente>(parametersConstructor);
+
+// 6. Solo con filtro (sin paginación)
+var parametersSoloFiltro = new StoredProcedureParameters
+{
+    ConnectionString = "Server=myServer;Database=myDB;Trusted_Connection=true;",
+    ProcedureName = "BuscarClientes",
+    ModelPaginacion = new ModelPaginacion
+    {
+        Filter = "activos"
+    }
+};
+var clientesFiltradosSolo = await dataService.EjecutarProcedimientoAsync<Cliente>(parametersSoloFiltro);
 ```
 
 ### Operaciones Masivas
@@ -185,15 +251,28 @@ var resultadoLote = await dataService.EjecutarOperacionesEnLoteAsync(
 
 ```csharp
 // Ahora el método EjecutarProcedimientoAsync<T> siempre retorna StoredProcedureResult<IEnumerable<T>>
-var resultadoConsulta = await dataService.EjecutarProcedimientoAsync<Cliente>(
-    "BuscarClientes", 
-    parametrosBusqueda
-);
+var parameters = new StoredProcedureParameters
+{
+    ConnectionString = "Server=myServer;Database=myDB;Trusted_Connection=true;",
+    ProcedureName = "BuscarClientes",
+    Model = parametrosBusqueda
+};
+
+var resultadoConsulta = await dataService.EjecutarProcedimientoAsync<Cliente>(parameters);
 
 if (resultadoConsulta.IsSuccess)
 {
     var clientes = resultadoConsulta.Data; // clientes es de tipo IEnumerable<Cliente>
     Console.WriteLine($"Se encontraron {clientes.Count()} clientes");
+    
+    // Información de paginación si está disponible
+    if (resultadoConsulta.TotalRecords.HasValue)
+    {
+        Console.WriteLine($"Total de registros: {resultadoConsulta.TotalRecords}");
+        Console.WriteLine($"Página actual: {resultadoConsulta.PageNumber}");
+        Console.WriteLine($"Tamaño de página: {resultadoConsulta.PageSize}");
+    }
+    
     // Puedes iterar sobre 'clientes' o usar métodos LINQ como .ToList(), .FirstOrDefault(), etc.
     var primerCliente = clientes.FirstOrDefault();
 }
@@ -205,10 +284,11 @@ else
 
 ## 🚀 Ventajas Clave
 
-1.  **Simplicidad**: API intuitiva que infiere automáticamente los tipos y siempre retorna colecciones.
+1.  **Simplicidad**: API intuitiva que infere automáticamente los tipos y siempre retorna colecciones.
 2.  **Rendimiento**: Operaciones masivas optimizadas para máxima velocidad.
 3.  **Flexibilidad**: Mapeo automático con opciones de personalización.
 4.  **Robustez**: Manejo de errores avanzado y recuperación automática.
+5.  **Unificación**: Un solo modelo de parámetros para todos los escenarios.
 
 ---
 

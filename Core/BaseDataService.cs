@@ -19,20 +19,56 @@ namespace LibraryDBApi.Core
     public class BaseDataService : IDataService
     {
         /// <summary>
-        /// Ejecuta un procedimiento almacenado y devuelve un resultado tipado como IEnumerable
+        /// Ejecuta un procedimiento almacenado y devuelve un resultado tipado como IEnumerable usando parámetros unificados
         /// </summary>
-        public async Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, int? pageNumber = null, int? pageSize = null) where TResult : new()
+        public async Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(StoredProcedureParameters parameters) where TResult : new()
         {
             try
             {
                 var dataSet = new DataSet();
-                using (var connection = new SqlConnection(connectionString))
-                using (var command = new SqlCommand(procedureName, connection))
+                using (var connection = new SqlConnection(parameters.ConnectionString))
+                using (var command = new SqlCommand(parameters.ProcedureName, connection))
                 {
                     command.CommandType = CommandType.StoredProcedure;
+
+                    // Si hay un modelo, obtener los parámetros del procedimiento y mapearlos
+                    if (parameters.Model != null)
+                    {
+                        var dbParameters = await GetProcedureParametersAsync(parameters.ConnectionString, parameters.ProcedureName);
+                        var modelDict = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                        
+                        foreach (var prop in parameters.Model.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+                        {
+                            modelDict[prop.Name] = prop.GetValue(parameters.Model);
+                        }
+
+                        var sqlParameters = new List<SqlParameter>();
+
+                        foreach (var dbParam in dbParameters)
+                        {
+                            if (modelDict.TryGetValue(dbParam.ParameterName.TrimStart('@'), out var value))
+                            {
+                                sqlParameters.Add(new SqlParameter(dbParam.ParameterName, dbParam.SqlDbType)
+                                {
+                                    Direction = dbParam.Direction,
+                                    Size = dbParam.Size > 0 ? dbParam.Size : 0,
+                                    Value = value ?? DBNull.Value
+                                });
+                            }
+                        }
+
+                        command.Parameters.AddRange(sqlParameters.ToArray());
+                    }
+
                     // Añadir parámetros de paginación al comando si se proporcionan
-                    if (pageNumber.HasValue) command.Parameters.AddWithValue("@PageNumber", pageNumber.Value);
-                    if (pageSize.HasValue) command.Parameters.AddWithValue("@PageSize", pageSize.Value);
+                    if (parameters.ModelPaginacion?.PageNumber.HasValue == true) 
+                        command.Parameters.AddWithValue("@PageNumber", parameters.ModelPaginacion.PageNumber.Value);
+                    if (parameters.ModelPaginacion?.PageSize.HasValue == true) 
+                        command.Parameters.AddWithValue("@PageSize", parameters.ModelPaginacion.PageSize.Value);
+
+                    // Añadir parámetro de filtro si se proporciona
+                    if (!string.IsNullOrEmpty(parameters.ModelPaginacion?.Filter)) 
+                        command.Parameters.AddWithValue("@Filter", parameters.ModelPaginacion.Filter);
 
                     var adapter = new SqlDataAdapter(command);
                     adapter.Fill(dataSet);
@@ -50,15 +86,15 @@ namespace LibraryDBApi.Core
                         result.TotalRecords = totalRecords;
                     }
                     // Asignar los valores de paginación pasados al resultado
-                    result.PageNumber = pageNumber;
-                    result.PageSize = pageSize;
+                    result.PageNumber = parameters.ModelPaginacion?.PageNumber;
+                    result.PageSize = parameters.ModelPaginacion?.PageSize;
                 }
                 else
                 {
                     result.Data = Enumerable.Empty<TResult>();
                     result.TotalRecords = 0; // Si no hay datos, TotalRecords es 0
-                    result.PageNumber = pageNumber;
-                    result.PageSize = pageSize;
+                    result.PageNumber = parameters.ModelPaginacion?.PageNumber;
+                    result.PageSize = parameters.ModelPaginacion?.PageSize;
                 }
                 
                 result.IsSuccess = true;
@@ -72,82 +108,12 @@ namespace LibraryDBApi.Core
         }
 
         /// <summary>
-        /// Ejecuta un procedimiento almacenado con parámetros y devuelve un resultado tipado como IEnumerable (inferencia automática del modelo)
+        /// Ejecuta un procedimiento almacenado sin modelo y devuelve un resultado tipado como IEnumerable
         /// </summary>
-        public async Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, object model, int? pageNumber = null, int? pageSize = null) where TResult : new()
+        public async Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, ModelPaginacion modelPaginacion = null) where TResult : new()
         {
-            try
-            {
-                var dbParameters = await GetProcedureParametersAsync(connectionString, procedureName);
-                var modelDict = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-                if (model != null)
-                {
-                    foreach (var prop in model.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
-                    {
-                        modelDict[prop.Name] = prop.GetValue(model);
-                    }
-                }
-
-                var parameters = new List<SqlParameter>();
-
-                foreach (var dbParam in dbParameters)
-                {
-                    if (modelDict.TryGetValue(dbParam.ParameterName.TrimStart('@'), out var value))
-                    {
-                        parameters.Add(new SqlParameter(dbParam.ParameterName, dbParam.SqlDbType)
-                        {
-                            Direction = dbParam.Direction,
-                            Size = dbParam.Size > 0 ? dbParam.Size : 0,
-                            Value = value ?? DBNull.Value
-                        });
-                    }
-                }
-
-                // Añadir parámetros de paginación a la lista de parámetros si se proporcionan
-                if (pageNumber.HasValue) parameters.Add(new SqlParameter("@PageNumber", pageNumber.Value));
-                if (pageSize.HasValue) parameters.Add(new SqlParameter("@PageSize", pageSize.Value));
-
-                var dataSet = new DataSet();
-                using (var connection = new SqlConnection(connectionString))
-                using (var command = new SqlCommand(procedureName, connection))
-                {
-                    command.CommandType = CommandType.StoredProcedure;
-                    command.Parameters.AddRange(parameters.ToArray());
-                    var adapter = new SqlDataAdapter(command);
-                    adapter.Fill(dataSet);
-                }
-
-                var result = new StoredProcedureResult<IEnumerable<TResult>>(dataSet);
-                if (dataSet.Tables.Count > 0)
-                {
-                    var table = dataSet.Tables[0];
-                    result.Data = DataTableToList<TResult>(table);
-
-                    // Extraer TotalRecords de la primera fila si existe y es un valor válido
-                    if (table.Rows.Count > 0 && table.Columns.Contains("TotalRecords") && int.TryParse(table.Rows[0]["TotalRecords"].ToString(), out int totalRecords))
-                    {
-                        result.TotalRecords = totalRecords;
-                    }
-                    // Asignar los valores de paginación pasados al resultado
-                    result.PageNumber = pageNumber;
-                    result.PageSize = pageSize;
-                }
-                else
-                {
-                    result.Data = Enumerable.Empty<TResult>();
-                    result.TotalRecords = 0; // Si no hay datos, TotalRecords es 0
-                    result.PageNumber = pageNumber;
-                    result.PageSize = pageSize;
-                }
-                
-                result.IsSuccess = true;
-                result.Message = "Operación exitosa";
-                return result;
-            }
-            catch (Exception ex)
-            {
-                return StoredProcedureResult<IEnumerable<TResult>>.Failure(ex);
-            }
+            var parameters = new StoredProcedureParameters(connectionString, procedureName, null, modelPaginacion);
+            return await EjecutarProcedimientoAsync<TResult>(parameters);
         }
 
         #region Operaciones Masivas Innovadoras
