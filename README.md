@@ -392,18 +392,6 @@ else
 | Mapeo de resultados | 50 líneas | 1 línea | 50x menos código |
 | Procedimientos almacenados | 20 líneas | 3 líneas | 7x menos código |
 
-## 📦 Publicación del Paquete NuGet
-
-Sigue estos pasos para crear y publicar el paquete NuGet de `LibraryDBApi`:
-
-### 1. Crear el paquete `.nupkg`
-
-Primero, asegúrate de que tu proyecto tenga la versión correcta (por ejemplo, `1.0.1` en `LibraryDBApi.csproj` si aún no lo has hecho, aunque la creación del paquete inferirá la versión del `csproj`). Luego, ejecuta el siguiente comando en la raíz de tu proyecto `LibraryDBApi`:
-
-```bash
-dotnet pack --configuration Release /p:Version=1.0.1
-```
-
 ## 📚 API Reference
 
 ### IDataService
