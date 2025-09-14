@@ -5,10 +5,27 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- NuGet package metadata -->
+    <PackageId>LibraryDBApi</PackageId>
+    <Version>1.1.2</Version>
+    <Authors>Daniel M</Authors>
+    <Company>Daniel M</Company>
+    <Description>Biblioteca .NET para ejecutar procedimientos almacenados y realizar operaciones masivas en SQL Server con mapeo automático y alto rendimiento.</Description>
+    <RepositoryUrl>https://github.com/DANII3L/LibraryDBApi</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>sql;sqlserver;stored-procedure;bulk;bulkcopy;data-access;orm;library</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.Data.SqlClient" Version="4.6.1" />
     <PackageReference Include="System.Text.Json" Version="8.0.4" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project> 

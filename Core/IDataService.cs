@@ -18,5 +18,21 @@ namespace LibraryDBApi.Core
         /// Ejecuta un procedimiento almacenado sin modelo y devuelve un resultado tipado como IEnumerable
         /// </summary>
         Task<StoredProcedureResult<IEnumerable<TResult>>> EjecutarProcedimientoAsync<TResult>(string connectionString, string procedureName, ModelPaginacion modelPaginacion = null) where TResult : new();
+
+        /// <summary>
+        /// Realiza una actualización masiva de datos usando procedimientos almacenados
+        /// </summary>
+        /// <typeparam name="TModel">Tipo del modelo a actualizar</typeparam>
+        /// <param name="parameters">Parámetros para la operación masiva</param>
+        /// <returns>Resultado de la operación masiva</returns>
+        Task<BulkOperationResult> ActualizarDatosMasivamenteAsync<TModel>(BulkUpdateParameters parameters) where TModel : class;
+
+        /// <summary>
+        /// Realiza una inserción masiva de datos usando procedimientos almacenados
+        /// </summary>
+        /// <typeparam name="TModel">Tipo del modelo a insertar</typeparam>
+        /// <param name="parameters">Parámetros para la operación masiva</param>
+        /// <returns>Resultado de la operación masiva</returns>
+        Task<BulkOperationResult> InsertarDatosMasivamenteAsync<TModel>(BulkInsertParameters parameters) where TModel : class;
     }
 } 

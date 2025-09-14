@@ -116,7 +116,362 @@ namespace LibraryDBApi.Core
             return await EjecutarProcedimientoAsync<TResult>(parameters);
         }
 
+        /// <summary>
+        /// Realiza una actualización masiva de datos usando procedimientos almacenados
+        /// </summary>
+        public async Task<BulkOperationResult> ActualizarDatosMasivamenteAsync<TModel>(BulkUpdateParameters parameters) where TModel : class
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var dataList = parameters.Data?.Cast<TModel>().ToList() ?? new List<TModel>();
+            
+            if (!dataList.Any())
+            {
+                return BulkOperationResult.Success(0, stopwatch.ElapsedMilliseconds, parameters.BatchSize);
+            }
+
+            try
+            {
+                using (var connection = new SqlConnection(parameters.ConnectionString))
+                {
+                    await connection.OpenAsync();
+                    
+                    var totalRowsAffected = 0;
+                    var batches = Chunk(dataList, parameters.BatchSize);
+                    
+                    foreach (var batch in batches)
+                    {
+                        var rowsAffected = await ProcessBulkUpdateBatchAsync<TModel>(connection, parameters, batch);
+                        totalRowsAffected += rowsAffected;
+                    }
+                    
+                    stopwatch.Stop();
+                    return BulkOperationResult.Success(totalRowsAffected, stopwatch.ElapsedMilliseconds, parameters.BatchSize);
+                }
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                return BulkOperationResult.Failure(ex, $"Error en actualización masiva con procedimiento {parameters.ProcedureName}");
+            }
+        }
+
+        /// <summary>
+        /// Realiza una inserción masiva de datos usando procedimientos almacenados
+        /// </summary>
+        public async Task<BulkOperationResult> InsertarDatosMasivamenteAsync<TModel>(BulkInsertParameters parameters) where TModel : class
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var dataList = parameters.Data?.Cast<TModel>().ToList() ?? new List<TModel>();
+            
+            if (!dataList.Any())
+            {
+                return BulkOperationResult.Success(0, stopwatch.ElapsedMilliseconds, parameters.BatchSize);
+            }
+
+            try
+            {
+                using (var connection = new SqlConnection(parameters.ConnectionString))
+                {
+                    await connection.OpenAsync();
+                    
+                    var totalRowsAffected = 0;
+                    var batches = Chunk(dataList, parameters.BatchSize);
+                    
+                    foreach (var batch in batches)
+                    {
+                        var rowsAffected = await ProcessBulkInsertBatchAsync<TModel>(connection, parameters, batch);
+                        totalRowsAffected += rowsAffected;
+                    }
+                    
+                    stopwatch.Stop();
+                    return BulkOperationResult.Success(totalRowsAffected, stopwatch.ElapsedMilliseconds, parameters.BatchSize);
+                }
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                return BulkOperationResult.Failure(ex, $"Error en inserción masiva con procedimiento {parameters.ProcedureName}");
+            }
+        }
+
         #region Métodos Auxiliares
+
+        // Procesar un lote de actualizaciones usando procedimiento almacenado
+        private async Task<int> ProcessBulkUpdateBatchAsync<TModel>(SqlConnection connection, BulkUpdateParameters parameters, TModel[] batch) where TModel : class
+        {
+            if (!batch.Any()) return 0;
+
+            try
+            {
+                using (var command = new SqlCommand(parameters.ProcedureName, connection))
+                {
+                    command.CommandType = CommandType.StoredProcedure;
+
+                    // Agregar parámetros del procedimiento almacenado
+                    await AddBulkOperationParametersAsync(command, parameters, batch);
+
+                    var rowsAffected = await command.ExecuteNonQueryAsync();
+                    return rowsAffected;
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error ejecutando procedimiento {parameters.ProcedureName}: {ex.Message}", ex);
+            }
+        }
+
+        // Procesar un lote de inserciones usando procedimiento almacenado
+        private async Task<int> ProcessBulkInsertBatchAsync<TModel>(SqlConnection connection, BulkInsertParameters parameters, TModel[] batch) where TModel : class
+        {
+            if (!batch.Any()) return 0;
+
+            try
+            {
+                using (var command = new SqlCommand(parameters.ProcedureName, connection))
+                {
+                    command.CommandType = CommandType.StoredProcedure;
+
+                    // Agregar parámetros del procedimiento almacenado
+                    await AddBulkOperationParametersAsync(command, parameters, batch);
+
+                    var rowsAffected = await command.ExecuteNonQueryAsync();
+                    return rowsAffected;
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Error ejecutando procedimiento {parameters.ProcedureName}: {ex.Message}", ex);
+            }
+        }
+
+        // Agregar parámetros para operaciones masivas
+        private async Task AddBulkOperationParametersAsync<TModel>(SqlCommand command, BulkOperationParameters parameters, TModel[] batch) where TModel : class
+        {
+            // Obtener los parámetros del procedimiento almacenado
+            var dbParameters = await GetProcedureParametersAsync(command.Connection.ConnectionString, parameters.ProcedureName);
+            var modelDict = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            
+            // Crear diccionario con las propiedades del modelo
+            var properties = typeof(TModel).GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            foreach (var prop in properties)
+            {
+                modelDict[prop.Name] = prop;
+            }
+
+            // Agregar parámetros del procedimiento
+            foreach (var dbParam in dbParameters)
+            {
+                var paramName = dbParam.ParameterName.TrimStart('@');
+                
+                // Buscar el parámetro en el modelo
+                if (modelDict.TryGetValue(paramName, out var propertyInfo) && propertyInfo is PropertyInfo prop)
+                {
+                    // Si es una propiedad del modelo, agregar el valor del primer elemento del batch
+                    var firstItem = batch.FirstOrDefault();
+                    if (firstItem != null)
+                    {
+                        var value = prop.GetValue(firstItem);
+                        command.Parameters.Add(new SqlParameter(dbParam.ParameterName, dbParam.SqlDbType)
+                        {
+                            Direction = dbParam.Direction,
+                            Size = dbParam.Size > 0 ? dbParam.Size : 0,
+                            Value = value ?? DBNull.Value
+                        });
+                    }
+                }
+                else if (paramName.Equals("BatchSize", StringComparison.OrdinalIgnoreCase))
+                {
+                    command.Parameters.Add(new SqlParameter(dbParam.ParameterName, dbParam.SqlDbType)
+                    {
+                        Direction = dbParam.Direction,
+                        Value = parameters.BatchSize
+                    });
+                }
+                else if (paramName.Equals("KeyColumn", StringComparison.OrdinalIgnoreCase) && parameters is BulkUpdateParameters updateParams)
+                {
+                    command.Parameters.Add(new SqlParameter(dbParam.ParameterName, dbParam.SqlDbType)
+                    {
+                        Direction = dbParam.Direction,
+                        Value = updateParams.KeyColumn
+                    });
+                }
+                else if (paramName.Equals("IgnoreIdentityColumns", StringComparison.OrdinalIgnoreCase) && parameters is BulkInsertParameters insertParams)
+                {
+                    command.Parameters.Add(new SqlParameter(dbParam.ParameterName, dbParam.SqlDbType)
+                    {
+                        Direction = dbParam.Direction,
+                        Value = insertParams.IgnoreIdentityColumns
+                    });
+                }
+                else if (parameters.AdditionalParameters != null)
+                {
+                    // Buscar en parámetros adicionales
+                    var additionalProps = parameters.AdditionalParameters.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance);
+                    var additionalProp = additionalProps.FirstOrDefault(p => 
+                        string.Equals(p.Name, paramName, StringComparison.OrdinalIgnoreCase));
+                    
+                    if (additionalProp != null)
+                    {
+                        var value = additionalProp.GetValue(parameters.AdditionalParameters);
+                        command.Parameters.Add(new SqlParameter(dbParam.ParameterName, dbParam.SqlDbType)
+                        {
+                            Direction = dbParam.Direction,
+                            Size = dbParam.Size > 0 ? dbParam.Size : 0,
+                            Value = value ?? DBNull.Value
+                        });
+                    }
+                }
+            }
+
+            // Agregar parámetro para los datos del batch (como JSON)
+            var dataParam = dbParameters.FirstOrDefault(p => 
+                p.ParameterName.TrimStart('@').Equals("Data", StringComparison.OrdinalIgnoreCase) ||
+                p.ParameterName.TrimStart('@').Equals("BatchData", StringComparison.OrdinalIgnoreCase));
+            
+            if (dataParam != null)
+            {
+                var dataJson = System.Text.Json.JsonSerializer.Serialize(batch);
+                command.Parameters.Add(new SqlParameter(dataParam.ParameterName, SqlDbType.NVarChar)
+                {
+                    Direction = dataParam.Direction,
+                    Size = dataJson.Length,
+                    Value = dataJson
+                });
+            }
+        }
+
+        // Obtener información detallada de columnas de una tabla
+        private async Task<Dictionary<string, ColumnInfo>> GetTableColumnInfoAsync(SqlConnection connection, string tableName)
+        {
+            var columnInfo = new Dictionary<string, ColumnInfo>(StringComparer.OrdinalIgnoreCase);
+            var sql = @"
+                SELECT 
+                    COLUMN_NAME,
+                    IS_IDENTITY,
+                    IS_NULLABLE,
+                    DATA_TYPE,
+                    CHARACTER_MAXIMUM_LENGTH,
+                    NUMERIC_PRECISION,
+                    NUMERIC_SCALE
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_NAME = @TableName 
+                ORDER BY ORDINAL_POSITION";
+
+            using (var command = new SqlCommand(sql, connection))
+            {
+                command.Parameters.AddWithValue("@TableName", tableName);
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        var columnName = reader["COLUMN_NAME"]?.ToString();
+                        if (!string.IsNullOrEmpty(columnName))
+                        {
+                            columnInfo[columnName] = new ColumnInfo
+                            {
+                                Name = columnName,
+                                IsIdentity = reader["IS_IDENTITY"]?.ToString() == "YES",
+                                IsNullable = reader["IS_NULLABLE"]?.ToString() == "YES",
+                                DataType = reader["DATA_TYPE"]?.ToString() ?? string.Empty,
+                                MaxLength = reader["CHARACTER_MAXIMUM_LENGTH"] != DBNull.Value ? Convert.ToInt32(reader["CHARACTER_MAXIMUM_LENGTH"]) : (int?)null,
+                                NumericPrecision = reader["NUMERIC_PRECISION"] != DBNull.Value ? Convert.ToInt32(reader["NUMERIC_PRECISION"]) : (int?)null,
+                                NumericScale = reader["NUMERIC_SCALE"] != DBNull.Value ? Convert.ToInt32(reader["NUMERIC_SCALE"]) : (int?)null
+                            };
+                        }
+                    }
+                }
+            }
+
+            return columnInfo;
+        }
+
+        // Obtener columnas de una tabla
+        private async Task<List<string>> GetTableColumnsAsync(SqlConnection connection, string tableName)
+        {
+            var columns = new List<string>();
+            var sql = @"
+                SELECT COLUMN_NAME 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_NAME = @TableName 
+                ORDER BY ORDINAL_POSITION";
+
+            using (var command = new SqlCommand(sql, connection))
+            {
+                command.Parameters.AddWithValue("@TableName", tableName);
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        var columnName = reader["COLUMN_NAME"]?.ToString();
+                        if (!string.IsNullOrEmpty(columnName))
+                        {
+                            columns.Add(columnName);
+                        }
+                    }
+                }
+            }
+
+            return columns;
+        }
+
+        // Obtener nombre de columna para una propiedad
+        private string? GetColumnName(PropertyInfo property, List<string> tableColumns)
+        {
+            // Verificar si hay mapeo explícito
+            var columnMappingAttribute = property.GetCustomAttribute<ColumnMappingAttribute>();
+            if (columnMappingAttribute != null)
+            {
+                return columnMappingAttribute.ColumnName;
+            }
+
+            // Mapeo automático
+            var propertyName = property.Name;
+            
+            // 1. Coincidencia exacta
+            var exactMatch = tableColumns.FirstOrDefault(c => 
+                string.Equals(c, propertyName, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(exactMatch))
+                return exactMatch;
+
+            // 2. Coincidencia con guiones bajos
+            var underscoreVersion = string.Join("_", 
+                System.Text.RegularExpressions.Regex.Split(propertyName, @"(?<!^)(?=[A-Z])"));
+            var underscoreMatch = tableColumns.FirstOrDefault(c => 
+                string.Equals(c, underscoreVersion, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(underscoreMatch))
+                return underscoreMatch;
+
+            // 3. Coincidencia parcial
+            var partialMatch = tableColumns.FirstOrDefault(c => 
+                c.Contains(propertyName, StringComparison.OrdinalIgnoreCase) ||
+                propertyName.Contains(c, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(partialMatch))
+                return partialMatch;
+
+            return null;
+        }
+
+        // Método Chunk para dividir colecciones en lotes (compatibilidad con .NET 9)
+        private static IEnumerable<T[]> Chunk<T>(IEnumerable<T> source, int size)
+        {
+            if (size <= 0) throw new ArgumentException("El tamaño debe ser mayor que 0", nameof(size));
+            
+            var list = new List<T>();
+            foreach (var item in source)
+            {
+                list.Add(item);
+                if (list.Count == size)
+                {
+                    yield return list.ToArray();
+                    list.Clear();
+                }
+            }
+            
+            if (list.Count > 0)
+            {
+                yield return list.ToArray();
+            }
+        }
 
         // Utilidad: Obtener los parámetros reales del procedimiento almacenado
         private async Task<List<DbParameterInfo>> GetProcedureParametersAsync(string connectionString, string procedureName)
@@ -438,12 +793,26 @@ namespace LibraryDBApi.Core
         // Clase auxiliar para metadatos de parámetros
         private class DbParameterInfo
         {
-            public string ParameterName { get; set; }
+            public string ParameterName { get; set; } = string.Empty;
             public SqlDbType SqlDbType { get; set; }
             public ParameterDirection Direction { get; set; }
             public int Size { get; set; }
         }
 
+        // Clase auxiliar para información de columnas
+        private class ColumnInfo
+        {
+            public string Name { get; set; } = string.Empty;
+            public bool IsIdentity { get; set; }
+            public bool IsNullable { get; set; }
+            public string DataType { get; set; } = string.Empty;
+            public int? MaxLength { get; set; }
+            public int? NumericPrecision { get; set; }
+            public int? NumericScale { get; set; }
+        }
+
         #endregion
     }
 } 
+
+

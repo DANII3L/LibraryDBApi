@@ -12,12 +12,11 @@ Una biblioteca **.NET 9.0** revolucionaria que automatiza llamadas a procedimien
 - **Parámetros unificados**: Modelo único `StoredProcedureParameters` que incluye todos los parámetros necesarios
 
 ### 🔥 Operaciones Masivas Ultra-Rápidas
-- **Inserción masiva**: SqlBulkCopy para máxima velocidad
-- **Actualización masiva**: Table-Valued Parameters para eficiencia
-- **Eliminación masiva**: Operaciones optimizadas en lote
-- **Upsert masivo**: Inserción/actualización inteligente
-- **Operaciones en lote**: Transacciones automáticas
-- **Sincronización masiva**: Sincronización entre tablas
+- **Inserción masiva**: Una sola conexión con procesamiento por lotes
+- **Actualización masiva**: Una sola conexión con mapeo automático
+- **Mapeo automático**: Detecta columnas de tabla y propiedades del modelo
+- **Procesamiento por lotes**: Configurable para optimizar rendimiento
+- **Manejo de identidad**: Opción para ignorar columnas de identidad automáticamente
 
 ### 🎯 Mapeo Avanzado
 - **Coincidencia flexible**: Ignora mayúsculas/minúsculas y caracteres especiales
@@ -122,129 +121,221 @@ var parametersSoloFiltro = new StoredProcedureParameters
 var clientesFiltradosSolo = await dataService.EjecutarProcedimientoAsync<Cliente>(parametersSoloFiltro);
 ```
 
-### Operaciones Masivas
+### Operaciones Masivas con Procedimientos Almacenados
 
 ```csharp
-// Inserción masiva ultra-rápida
-var clientes = new List<Cliente> { /* ... */ };
-var resultadoInsercion = await dataService.InsertarDatosMasivamenteAsync(
-    connectionString, // Asumiendo que connectionString es accesible o se pasa
-    "Clientes", 
-    clientes
-);
-
-// Actualización masiva eficiente
-var resultadoActualizacion = await dataService.ActualizarUsuariosMasivamenteAsync(
-    clientes // Ahora toma List<Usuario> directamente
-);
-
-// Sincronización entre tablas
-var resultadoSincronizacion = await dataService.SincronizarDatosMasivamenteAsync(
-    connectionString, 
-    "ClientesTemp", 
-    "Clientes", 
-    "Id"
-);
-```
-
-## 🔧 Modelos de Ejemplo
-
-```csharp
-// Modelo para parámetros
-public class BusquedaCliente
+// Inserción masiva usando procedimiento almacenado
+var nuevosClientes = new List<Cliente>
 {
-    public string Nombre { get; set; }
-    public int? Edad { get; set; }
-    public string Ciudad { get; set; }
-}
-
-// Modelo para resultados
-public class Cliente
-{
-    public int Id { get; set; }
-    public string Nombre { get; set; }
-    public string Email { get; set; }
-    public DateTime FechaRegistro { get; set; }
-}
-
-// Modelo de Usuario (ejemplo de la conversación)
-public class Usuario
-{
-    public int Id { get; set; }
-    public string Nombre { get; set; }
-    public string Rol { get; set; }
-    public bool Activo { get; set; }
-    public DateTime FechaCreacion { get; set; }
-}
-```
-
-## 🎨 Atributos de Mapeo Avanzado
-
-```csharp
-public class Cliente
-{
-    [ColumnMapping("ID_CLIENTE")]  // Mapeo explícito
-    public int Id { get; set; }
-    
-    [ColumnMapping("NOMBRE_COMPLETO")]
-    public string Nombre { get; set; }
-    
-    [IgnoreMapping]  // Ignorar propiedad
-    public string PropiedadInterna { get; set; }
-    
-    // [CustomConverter(typeof(EmailConverter))]  // Conversión personalizada (descomentar si existe)
-    public string Email { get; set; }
-}
-```
-
-## ⚡ Operaciones Masivas Avanzadas
-
-```csharp
-// Opciones personalizadas para inserción
-var opcionesInsert = new BulkInsertOptions
-{
-    BatchSize = 1000,
-    Timeout = 300,
-    // EnableStreaming = true // Comentar si no existe esta propiedad
+    new Cliente { Nombre = "Juan Pérez", Email = "juan@email.com", Activo = true },
+    new Cliente { Nombre = "María García", Email = "maria@email.com", Activo = true },
+    new Cliente { Nombre = "Carlos López", Email = "carlos@email.com", Activo = false }
 };
 
-var resultadoOps = await dataService.InsertarDatosMasivamenteAsync(
-    connectionString, 
-    "Clientes", 
-    clientes, 
-    opcionesInsert
+var parametrosInsercion = new BulkInsertParameters(
+    connectionString: connectionString,
+    procedureName: "sp_BulkInsertClientes",  // Procedimiento almacenado
+    data: nuevosClientes,
+    batchSize: 1000,
+    ignoreIdentityColumns: true
 );
 
-// Operaciones en lote con transacción
-var operacionesLote = new List<BatchOperation>
+var resultadoInsercion = await dataService.InsertarDatosMasivamenteAsync<Cliente>(parametrosInsercion);
+
+// Actualización masiva usando procedimiento almacenado
+var clientesParaActualizar = new List<Cliente>
 {
-    new BatchOperation { Type = BatchOperationType.Insert, TableName = "Clientes", Data = clientes },
-    new BatchOperation { Type = BatchOperationType.Update, TableName = "Productos", Data = productos }
+    new Cliente { Id = 1, Nombre = "Juan Actualizado", Email = "juan@email.com" },
+    new Cliente { Id = 2, Nombre = "María Actualizada", Email = "maria@email.com" }
 };
 
-var resultadoLote = await dataService.EjecutarOperacionesEnLoteAsync(
-    connectionString, 
-    operacionesLote
+var parametrosActualizacion = new BulkUpdateParameters(
+    connectionString: connectionString,
+    procedureName: "sp_BulkUpdateClientes",  // Procedimiento almacenado
+    data: clientesParaActualizar,
+    keyColumn: "Id",
+    batchSize: 1000
 );
+
+var resultadoActualizacion = await dataService.ActualizarDatosMasivamenteAsync<Cliente>(parametrosActualizacion);
+
+// Verificar resultados
+if (resultadoInsercion.IsSuccess)
+{
+    Console.WriteLine($"✅ {resultadoInsercion.RowsAffected} registros insertados en {resultadoInsercion.ExecutionTimeMs}ms");
+}
+
+if (resultadoActualizacion.IsSuccess)
+{
+    Console.WriteLine($"✅ {resultadoActualizacion.RowsAffected} registros actualizados en {resultadoActualizacion.ExecutionTimeMs}ms");
+}
 ```
 
-## 🛠️ Utilidades Avanzadas
+## ⚡ Operaciones Masivas Avanzadas con Procedimientos Almacenados
+
+### Inserción Masiva con Procedimientos Almacenados
 
 ```csharp
-// Optimización de rendimiento (ejemplo hipotético, verificar si estos métodos existen)
-// await BulkOperationUtilities.OptimizarTablaAsync(connectionString, "Clientes");
+// Inserción masiva usando procedimiento almacenado con lógica de negocio
+var nuevosProductos = new List<Producto>
+{
+    new Producto { Nombre = "Laptop Gaming", Precio = 1299.99m, Stock = 10, Categoria = "Electrónicos" },
+    new Producto { Nombre = "Mouse Inalámbrico", Precio = 29.99m, Stock = 50, Categoria = "Accesorios" },
+    new Producto { Nombre = "Teclado Mecánico", Precio = 89.99m, Stock = 25, Categoria = "Accesorios" }
+};
 
-// Análisis de rendimiento
-// var estadisticas = await BulkOperationUtilities.AnalizarRendimientoAsync(
-//     connectionString, 
-//     "Clientes"
-// );
+var parametrosInsercion = new BulkInsertParameters(
+    connectionString: connectionString,
+    procedureName: "sp_BulkInsertProductos",  // Procedimiento con validaciones y lógica
+    data: nuevosProductos,
+    batchSize: 1000,
+    ignoreIdentityColumns: true
+);
 
-// Recomendaciones de optimización
-// var recomendaciones = await BulkOperationUtilities.ObtenerRecomendacionesAsync(
-//     connectionString, 
-//     "Clientes"
-// );
+var resultado = await dataService.InsertarDatosMasivamenteAsync<Producto>(parametrosInsercion);
+
+if (resultado.IsSuccess)
+{
+    Console.WriteLine($"✅ {resultado.RowsAffected} registros insertados en {resultado.ExecutionTimeMs}ms");
+}
+else
+{
+    Console.WriteLine($"❌ Error: {resultado.Message}");
+}
+```
+
+### Actualización Masiva con Procedimientos Almacenados
+
+```csharp
+// Actualización masiva usando procedimiento almacenado con validaciones
+var clientesParaActualizar = new List<Cliente>
+{
+    new Cliente { Id = 1, Nombre = "Juan Pérez Actualizado", Email = "juan.actualizado@email.com" },
+    new Cliente { Id = 2, Nombre = "María García Actualizada", Email = "maria.actualizada@email.com" },
+    new Cliente { Id = 3, Nombre = "Carlos López Actualizado", Email = "carlos.actualizado@email.com" }
+};
+
+var parametrosActualizacion = new BulkUpdateParameters(
+    connectionString: connectionString,
+    procedureName: "sp_BulkUpdateClientes",  // Procedimiento con validaciones y auditoría
+    data: clientesParaActualizar,
+    keyColumn: "Id",
+    batchSize: 1000
+);
+
+var resultado = await dataService.ActualizarDatosMasivamenteAsync<Cliente>(parametrosActualizacion);
+
+if (resultado.IsSuccess)
+{
+    Console.WriteLine($"✅ {resultado.RowsAffected} registros actualizados en {resultado.ExecutionTimeMs}ms");
+}
+else
+{
+    Console.WriteLine($"❌ Error: {resultado.Message}");
+}
+```
+
+### Características de las Operaciones Masivas con Procedimientos Almacenados
+
+- **Lógica de negocio**: Los procedimientos pueden incluir validaciones, auditoría, y reglas de negocio
+- **Transacciones automáticas**: Control de transacciones dentro del procedimiento almacenado
+- **Optimización de rendimiento**: Procedimientos compilados y optimizados por SQL Server
+- **Seguridad mejorada**: Protección contra inyección SQL y control de acceso granular
+- **Mapeo automático**: Detecta automáticamente los parámetros del procedimiento y las propiedades del modelo
+- **Procesamiento por lotes**: Divide los datos en lotes configurables para mejor rendimiento
+- **Manejo de errores robusto**: Captura y reporta errores detallados del procedimiento
+
+### Ejemplos de Procedimientos Almacenados
+
+#### Procedimiento de Inserción Masiva
+```sql
+CREATE PROCEDURE sp_BulkInsertClientes
+    @Data NVARCHAR(MAX),           -- JSON con los datos del batch
+    @BatchSize INT = 1000,         -- Tamaño del lote
+    @IgnoreIdentityColumns BIT = 1 -- Ignorar columnas de identidad
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        
+        -- Insertar datos desde JSON
+        INSERT INTO Clientes (Nombre, Email, Activo, FechaCreacion)
+        SELECT 
+            JSON_VALUE(value, '$.Nombre'),
+            JSON_VALUE(value, '$.Email'),
+            CAST(JSON_VALUE(value, '$.Activo') AS BIT),
+            GETDATE()
+        FROM OPENJSON(@Data);
+        
+        COMMIT TRANSACTION;
+        
+        -- Retornar número de filas afectadas
+        SELECT @@ROWCOUNT AS RowsAffected;
+        
+    END TRY
+    BEGIN CATCH
+        ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END
+```
+
+#### Procedimiento de Actualización Masiva
+```sql
+CREATE PROCEDURE sp_BulkUpdateClientes
+    @Data NVARCHAR(MAX),    -- JSON con los datos del batch
+    @KeyColumn NVARCHAR(50), -- Columna clave
+    @BatchSize INT = 1000    -- Tamaño del lote
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        
+        -- Actualizar datos desde JSON
+        UPDATE c SET
+            c.Nombre = JSON_VALUE(j.value, '$.Nombre'),
+            c.Email = JSON_VALUE(j.value, '$.Email'),
+            c.FechaModificacion = GETDATE()
+        FROM Clientes c
+        INNER JOIN OPENJSON(@Data) j 
+            ON c.Id = CAST(JSON_VALUE(j.value, '$.Id') AS INT);
+        
+        COMMIT TRANSACTION;
+        
+        -- Retornar número de filas afectadas
+        SELECT @@ROWCOUNT AS RowsAffected;
+        
+    END TRY
+    BEGIN CATCH
+        ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END
+```
+
+## 🛠️ Configuración y Mejores Prácticas
+
+### Configuración de Tamaño de Lote
+
+```csharp
+// Para operaciones pequeñas (menos de 1000 registros)
+var resultado = await dataService.InsertarDatosMasivamenteAsync(
+    connectionString, "Tabla", datos, batchSize: 100
+);
+
+// Para operaciones grandes (más de 10000 registros)
+var resultado = await dataService.InsertarDatosMasivamenteAsync(
+    connectionString, "Tabla", datos, batchSize: 5000
+);
+
+// Para operaciones con columnas de identidad personalizadas
+var resultado = await dataService.InsertarDatosMasivamenteAsync(
+    connectionString, "Tabla", datos, batchSize: 1000, ignoreIdentityColumns: false
+);
 ```
 
 ## 🔍 Manejo de Resultados
@@ -299,6 +390,7 @@ else
 | 1000 inserciones | 15 segundos | 0.5 segundos | 30x más rápido |
 | 1000 actualizaciones | 25 segundos | 2 segundos | 12x más rápido |
 | Mapeo de resultados | 50 líneas | 1 línea | 50x menos código |
+| Procedimientos almacenados | 20 líneas | 3 líneas | 7x menos código |
 
 ## 📦 Publicación del Paquete NuGet
 
@@ -312,18 +404,92 @@ Primero, asegúrate de que tu proyecto tenga la versión correcta (por ejemplo, 
 dotnet pack --configuration Release /p:Version=1.0.1
 ```
 
-Este comando compilará tu proyecto en modo `Release` y generará el archivo `.nupkg` (por ejemplo, `LibraryDBApi.1.0.1.nupkg`) en la carpeta `bin/Release/` o `bin/Release/net9.0/`.
+## 📚 API Reference
 
-### 2. Publicar el paquete en NuGet.org
+### IDataService
 
-Antes de publicar, asegúrate de tener una cuenta en [NuGet.org](https://www.nuget.org/) y haber generado una clave de API.
+#### EjecutarProcedimientoAsync<TResult>(StoredProcedureParameters)
+Ejecuta un procedimiento almacenado usando parámetros unificados.
 
-```bash
-dotnet nuget push "C:\Users\bedom\OneDrive\Documentos\Daniel M\DORA\LibraryDB\LibraryDBApi\bin\Release\LibraryDBApi.1.0.1.nupkg" --source "https://nuget.pkg.github.com/DANII3L/index.json" --api-key %NUGET_GITHUB_TOKEN% --skip-duplicate
-```
+**Parámetros:**
+- `parameters`: Objeto `StoredProcedureParameters` con la configuración completa
 
-**Reemplaza `bin/Release/LibraryDBApi.1.0.1.nupkg`** con la ruta real a tu archivo `.nupkg` (la ruta exacta puede variar ligeramente dependiendo de la estructura de tu proyecto y la versión de .NET, podría ser `bin/Release/net9.0/LibraryDBApi.1.0.1.nupkg`).
+**Retorna:** `Task<StoredProcedureResult<IEnumerable<TResult>>>`
 
-**Reemplaza `TU_API_KEY_AQUI`** con tu clave de API generada en NuGet.org.
+#### EjecutarProcedimientoAsync<TResult>(string, string, ModelPaginacion)
+Ejecuta un procedimiento almacenado sin modelo de parámetros.
 
-Una vez que el comando se complete exitosamente, tu paquete estará disponible públicamente en NuGet.org para que otros desarrolladores puedan instalarlo. 
+**Parámetros:**
+- `connectionString`: Cadena de conexión a la base de datos
+- `procedureName`: Nombre del procedimiento almacenado
+- `modelPaginacion`: Modelo de paginación (opcional)
+
+**Retorna:** `Task<StoredProcedureResult<IEnumerable<TResult>>>`
+
+#### ActualizarDatosMasivamenteAsync<TModel>(BulkUpdateParameters)
+Realiza una actualización masiva de datos usando procedimientos almacenados.
+
+**Parámetros:**
+- `parameters`: Objeto `BulkUpdateParameters` con la configuración completa
+
+**Retorna:** `Task<BulkOperationResult>`
+
+#### InsertarDatosMasivamenteAsync<TModel>(BulkInsertParameters)
+Realiza una inserción masiva de datos usando procedimientos almacenados.
+
+**Parámetros:**
+- `parameters`: Objeto `BulkInsertParameters` con la configuración completa
+
+**Retorna:** `Task<BulkOperationResult>`
+
+### Modelos Principales
+
+#### StoredProcedureParameters
+Modelo unificado para parámetros de procedimientos almacenados.
+
+**Propiedades:**
+- `ConnectionString`: Cadena de conexión
+- `ProcedureName`: Nombre del procedimiento
+- `Model`: Modelo de parámetros (opcional)
+- `ModelPaginacion`: Configuración de paginación (opcional)
+
+#### BulkOperationResult
+Resultado de operaciones masivas.
+
+**Propiedades:**
+- `IsSuccess`: Indica si la operación fue exitosa
+- `Message`: Mensaje de resultado
+- `RowsAffected`: Número de filas afectadas
+- `ExecutionTimeMs`: Tiempo de ejecución en milisegundos
+- `BatchSize`: Tamaño del lote procesado
+- `Exception`: Excepción capturada (si aplica)
+
+#### ModelPaginacion
+Configuración de paginación para procedimientos almacenados.
+
+**Propiedades:**
+- `PageNumber`: Número de página
+- `PageSize`: Tamaño de página
+- `Filter`: Filtro adicional como string
+
+#### BulkInsertParameters
+Parámetros para operaciones de inserción masiva.
+
+**Propiedades:**
+- `ConnectionString`: Cadena de conexión a la base de datos
+- `ProcedureName`: Nombre del procedimiento almacenado
+- `Data`: Lista de objetos a insertar
+- `BatchSize`: Tamaño del lote (opcional, por defecto 1000)
+- `IgnoreIdentityColumns`: Si debe ignorar columnas de identidad (opcional, por defecto true)
+- `AdditionalParameters`: Parámetros adicionales para el procedimiento (opcional)
+
+#### BulkUpdateParameters
+Parámetros para operaciones de actualización masiva.
+
+**Propiedades:**
+- `ConnectionString`: Cadena de conexión a la base de datos
+- `ProcedureName`: Nombre del procedimiento almacenado
+- `Data`: Lista de objetos a actualizar
+- `KeyColumn`: Columna clave para identificar registros
+- `BatchSize`: Tamaño del lote (opcional, por defecto 1000)
+- `AdditionalParameters`: Parámetros adicionales para el procedimiento (opcional) 
